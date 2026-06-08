@@ -250,10 +250,10 @@ begin
                         if solved = '1' then
                             state <= DONE;
                         else
-                            if eval_j < current_y + 1 then
+                            if eval_j < current_y + 1 or eval_j = 127 then --eval_j = 127 je "minus jedan" zbog underflow-a, pa ce sledeca linija da overflow-uje nazad na nulu
                                 eval_j <= eval_j + 1;
                                 state  <= EVAL_READ;
-                            elsif eval_i < current_x + 1 then
+                            elsif eval_i < current_x + 1 or eval_i = 127 then --eval_i = 127 je "minus jedan" zbog underflow-a, pa ce sledeca linija da overflow-uje nazad na nulu
                                 eval_i <= eval_i + 1;
                                 eval_j <= current_y - 1;
                                 state  <= EVAL_READ;
