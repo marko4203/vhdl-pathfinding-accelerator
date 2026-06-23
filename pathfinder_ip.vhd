@@ -11,8 +11,8 @@ use ieee.numeric_std.all;
 --
 -- Kodirane vrednosti:
 --   298 = WALL
---   299 = START node
---   300 = END node
+--   299 = START
+--   300 = END
 --   301 = FINALPATH - ne koristi se u IP, procesor obradjuje taj deo
 -- ---------------------------------------------------------------------------
 
@@ -26,19 +26,19 @@ entity pathfinder_ip is
         clk        : in  std_logic;
         rst      : in  std_logic;
 
-        --CPU interfejs registri
+        -- CPU interfejs registri
         cpu_we     : in  std_logic;
         cpu_addr   : in  std_logic_vector(1 downto 0);   -- 0/1/2
         cpu_wdata  : in  std_logic_vector(ADDR_BITS-1 downto 0);
 
-        -- BRAM port (single port used by IP)
+        -- BRAM interfejs
         bram_en    : out std_logic;
         bram_we    : out std_logic;
         bram_addr  : out std_logic_vector(ADDR_BITS-1 downto 0);
         bram_din   : out std_logic_vector(DATA_BITS-1 downto 0);
         bram_dout  : in  std_logic_vector(DATA_BITS-1 downto 0);
 
-        -- Interrupt to CPU
+        -- Interrupt signal ka procesoru
         irq        : out std_logic
     );
 end entity pathfinder_ip;
@@ -53,10 +53,10 @@ architecture rtl of pathfinder_ip is
         EVAL_PROCESS,
         EVAL_WRITE,
         EVAL_NEXT,
-        MOVE_SCAN_READ,
-        MOVE_SCAN_WAIT,
-        MOVE_SCAN_PROCESS,
-        MOVE_SCAN_NEXT,
+        MOVE_READ,
+        MOVE_WAIT,
+        MOVE_PROCESS,
+        MOVE_NEXT,
         DONE
     );
 
@@ -73,7 +73,7 @@ architecture rtl of pathfinder_ip is
     signal eval_i : unsigned(6 downto 0) := (others => '0');
     signal eval_j : unsigned(6 downto 0) := (others => '0');
 
-    -- Full-grid scan counters -- prate ternutni min_dist node
+    -- Pomocni signali za move deo koji prate ternutni min_dist node
     signal scan_x    : unsigned(6 downto 0) := (others => '0');
     signal scan_y    : unsigned(6 downto 0) := (others => '0');
 
@@ -265,20 +265,20 @@ begin
                                 min_dist <= (others => '1');
                                 next_x   <= (others => '1');
                                 next_y   <= (others => '1');
-                                state    <= MOVE_SCAN_READ;
+                                state    <= MOVE_READ;
                             end if;
                         end if;
 
                     --celina za move blok
-                    when MOVE_SCAN_READ =>
+                    when MOVE_READ =>
                         bram_addr_int <= bram_flat(scan_x, scan_y); --pretraga mape pocinje od (0,0) sto je postavljeno u EVAL_NEXT pre prelaza u ovo stanje
                         bram_we_int   <= '0';
-                        state         <= MOVE_SCAN_WAIT;
+                        state         <= MOVE_WAIT;
 
-                    when MOVE_SCAN_WAIT =>
-                        state <= MOVE_SCAN_PROCESS;
+                    when MOVE_WAIT =>
+                        state <= MOVE_PROCESS;
 
-                    when MOVE_SCAN_PROCESS =>
+                    when MOVE_PROCESS =>
                         v_dist    := unsigned(bram_dout(23 downto 15));
                         v_visited := bram_dout(0);
                         
@@ -291,16 +291,16 @@ begin
                             next_x   <= scan_x;
                             next_y   <= scan_y;
                         end if;
-                        state <= MOVE_SCAN_NEXT;
+                        state <= MOVE_NEXT;
 
-                    when MOVE_SCAN_NEXT =>
+                    when MOVE_NEXT =>
                         if scan_y < GRID_SIZE - 1 then
                             scan_y <= scan_y + 1;
-                            state  <= MOVE_SCAN_READ;
+                            state  <= MOVE_READ;
                         elsif scan_x < GRID_SIZE - 1 then
                             scan_x <= scan_x + 1;
                             scan_y <= (others => '0');
-                            state  <= MOVE_SCAN_READ;
+                            state  <= MOVE_READ;
                         else --pretrazena je cela mapa
                             if next_x = "1111111" or next_y = "1111111" then
                                 --next_x i next_y nisu pomereni, znaci da nema vise validnih node_ova i mapa je neresiva
