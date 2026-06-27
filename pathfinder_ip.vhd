@@ -125,7 +125,7 @@ begin
         -- Funkcija za proracun adrese na osnovu x i y koord
         function bram_flat(x, y : unsigned(6 downto 0)) return unsigned is
         begin
-            return resize(x, ADDR_BITS) * GRID_SIZE + resize(y, ADDR_BITS);
+            return (x * GRID_SIZE) + resize(y, ADDR_BITS);
         end function;
 
         -- Funkcija za proracun heuristike
