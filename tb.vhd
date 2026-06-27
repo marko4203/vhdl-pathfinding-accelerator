@@ -30,6 +30,7 @@ architecture Behavioral of tb is
     constant CLK_PERIOD : time    := 10 ns;   -- 100 MHz
     constant BRAM_DEPTH : integer := 10000;
     constant BRAM_INIT  : string  := "C:/bram_init.txt";
+    constant BRAM_DUMP   : string  := "C:/dodavanjeIP/bram_dump.txt";
 
     constant START_X : integer := 5;
     constant START_Y : integer := 5;
@@ -119,30 +120,15 @@ begin
         clka <= '1';
         wait for CLK_PERIOD / 2;
     end process;
-
-    irq_monitor : process
-    begin
-        wait until rst_ip = '1';
-
-        wait until rising_edge(irq_ip) or irq_ip = '1';
-
-        report "============================================================"
-            severity note;
-        report "[IRQ] IP digao irq_ip at " &
-               time'image(now) severity note;
-        report "============================================================"
-            severity note;
-        wait until rising_edge(clka);
-
-        report "Simulation ended normally after IRQ." severity failure;
-    end process;
-
+        
     load_proc : process
         file     init_file : text;
         variable row       : line;
         variable data_slv  : std_logic_vector(23 downto 0);
         variable addr_int  : integer := 0;
         variable open_ok   : file_open_status;
+        file     dump_file : text;
+        variable node      : std_logic_vector(23 downto 0);
     begin
         rst_ip <= '0';
         wea    <= '0';
@@ -234,6 +220,26 @@ begin
 
         cpu_addr_ip  <= (others => '0');
         cpu_wdata_ip <= (others => '0');
+        
+        wait until irq_ip = '1';
+        wait until rising_edge(clka);
+
+        file_open(open_ok, dump_file, BRAM_DUMP, write_mode);
+
+        if open_ok /= open_ok then
+            report "[DUMP] GRESKA: Nije moguce otvoriti dump fajl: " & BRAM_DUMP severity failure;
+        end if;
+
+        for i in 0 to BRAM_DEPTH - 1 loop
+            addra <= std_logic_vector(to_unsigned(i, 14));
+            wait until rising_edge(clka);
+            wait until rising_edge(clka);
+            write(row, douta);
+            writeline(dump_file, row);
+        end loop;
+
+        file_close(dump_file);
+        report "[DUMP] Dump zavrsen." severity failure;
 
         wait;
     end process;
