@@ -31,7 +31,7 @@ architecture Behavioral of tb is
     constant BRAM_DEPTH    : integer := 2500;
     constant TOTAL_DEPTH   : integer := 10000;
     constant BRAM_INIT     : string  := "C:/bram_init2.txt";
-    constant BRAM_DUMP     : string  := "C:/test2/bram_dump.txt";
+    constant BRAM_DUMP     : string  := "C:/test2/bram_dump2.txt";
 
     constant START_X : integer := 5;
     constant START_Y : integer := 5;
@@ -45,7 +45,6 @@ architecture Behavioral of tb is
 
     signal clka  : std_logic := '0';
 
-    -- Port-A signals per BRAM (TB load/dump side)
     signal ena1  : std_logic := '1';
     signal wea1  : std_logic := '0';
     signal addra1: std_logic_vector(11 downto 0) := (others => '0');
@@ -78,14 +77,12 @@ architecture Behavioral of tb is
     signal cpu_addr_ip  : std_logic_vector(1 downto 0) := (others => '0');
     signal cpu_wdata_ip : std_logic_vector(13 downto 0) := (others => '0');
 
-    -- Global IP BRAM interface (14-bit, used by EVAL and serial MOVE)
     signal bram_en_ip   : std_logic;
     signal bram_we_ip   : std_logic;
     signal bram_addr_ip : std_logic_vector(13 downto 0);
     signal bram_din_ip  : std_logic_vector(23 downto 0);
     signal bram_dout_ip : std_logic_vector(23 downto 0);
 
-    -- Parallel BRAM interfaces from IP (12-bit sub-addresses)
     signal bram_parallel_ip : std_logic;
 
     signal bram1_en_ip   : std_logic;
@@ -114,7 +111,6 @@ architecture Behavioral of tb is
 
     signal irq_ip : std_logic;
 
-    -- Port-B signals fed to each BRAM: muxed between global and parallel interfaces
     signal enb1  : std_logic;
     signal web1  : std_logic;
     signal addrb1: std_logic_vector(11 downto 0);
@@ -135,16 +131,11 @@ architecture Behavioral of tb is
     signal addrb4: std_logic_vector(11 downto 0);
     signal dinb4 : std_logic_vector(23 downto 0);
 
-    -- Decoded global address: which BRAM and 12-bit sub-address
     signal global_sel     : integer range 1 to 4;
     signal global_subaddr : std_logic_vector(11 downto 0);
 
 begin
 
-    -- -------------------------------------------------------------------------
-    -- Address decode: map 14-bit global bram_addr_ip to (sel, 12-bit sub-addr)
-    -- Ranges: 0-2499->BRAM1, 2500-4999->BRAM2, 5000-7499->BRAM3, 7500-9999->BRAM4
-    -- -------------------------------------------------------------------------
     process(bram_addr_ip)
         variable full : unsigned(13 downto 0);
         variable sub  : unsigned(11 downto 0);
@@ -164,10 +155,6 @@ begin
         global_subaddr <= std_logic_vector(sub);
     end process;
 
-    -- -------------------------------------------------------------------------
-    -- Port-B mux: bram_parallel='1' -> individual interfaces, '0' -> global
-    -- Only write-enable the BRAM selected by the global address in serial mode
-    -- -------------------------------------------------------------------------
     process(bram_parallel_ip,
             bram_en_ip, bram_we_ip, global_subaddr, bram_din_ip, global_sel,
             bram1_en_ip, bram1_we_ip, bram1_addr_ip, bram1_din_ip,
@@ -197,7 +184,6 @@ begin
         end if;
     end process;
 
-    -- Route the selected BRAM's port-B dout back to the IP's global bram_dout
     process(global_sel, bram1_dout_ip, bram2_dout_ip, bram3_dout_ip, bram4_dout_ip)
     begin
         case global_sel is
@@ -208,9 +194,6 @@ begin
         end case;
     end process;
 
-    -- -------------------------------------------------------------------------
-    -- BRAM instances (port A = TB load/dump, port B = IP via mux above)
-    -- -------------------------------------------------------------------------
     bram1TB : entity work.bram
         port map (
             clka  => clka,
@@ -362,7 +345,6 @@ begin
             if row'length > 0 then
                 read(row, data_slv);
                 sub_addr := addr_int mod BRAM_DEPTH;
-                -- Decode address to the correct BRAM and write only to that one
                 if addr_int < BRAM_DEPTH then
                     addra1 <= std_logic_vector(to_unsigned(sub_addr, 12));
                     dina1  <= data_slv;
@@ -456,21 +438,24 @@ begin
 
         for i in 0 to TOTAL_DEPTH - 1 loop
             sub_addr := i mod BRAM_DEPTH;
-            -- Read from the correct BRAM and wait two cycles for data to appear on douta
             if i < BRAM_DEPTH then
                 addra1 <= std_logic_vector(to_unsigned(sub_addr, 12));
+                wait until rising_edge(clka);
                 wait until rising_edge(clka);
                 write(row, douta1);
             elsif i < 2*BRAM_DEPTH then
                 addra2 <= std_logic_vector(to_unsigned(sub_addr, 12));
                 wait until rising_edge(clka);
+                wait until rising_edge(clka);
                 write(row, douta2);
             elsif i < 3*BRAM_DEPTH then
                 addra3 <= std_logic_vector(to_unsigned(sub_addr, 12));
                 wait until rising_edge(clka);
+                wait until rising_edge(clka);
                 write(row, douta3);
             else
                 addra4 <= std_logic_vector(to_unsigned(sub_addr, 12));
+                wait until rising_edge(clka);
                 wait until rising_edge(clka);
                 write(row, douta4);
             end if;

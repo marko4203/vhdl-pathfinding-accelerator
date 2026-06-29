@@ -120,7 +120,6 @@ architecture rtl of pathfinder_ip is
     
     signal current_node : std_logic_vector(DATA_BITS-1 downto 0);
 
-    -- Parallel scan position signals (each scanner covers its own 2500-entry bank)
     signal pscan_x1 : unsigned(6 downto 0) := (others => '0');
     signal pscan_y1 : unsigned(6 downto 0) := (others => '0');
     signal pscan_x2 : unsigned(6 downto 0) := (others => '0');
@@ -130,7 +129,6 @@ architecture rtl of pathfinder_ip is
     signal pscan_x4 : unsigned(6 downto 0) := (others => '0');
     signal pscan_y4 : unsigned(6 downto 0) := (others => '0');
 
-    -- Per-bank local minimum tracking for parallel scan
     signal min_dist1 : unsigned(8 downto 0) := (others => '1');
     signal next_x1   : unsigned(6 downto 0) := (others => '1');
     signal next_y1   : unsigned(6 downto 0) := (others => '1');
@@ -221,7 +219,6 @@ begin
             return result;
         end function;
 
-        -- Compute 12-bit sub-address within a bank from a flat global address
         function bram_sub(flat : unsigned(ADDR_BITS-1 downto 0)) return std_logic_vector is
             variable sub : unsigned(11 downto 0);
         begin
@@ -241,7 +238,6 @@ begin
         variable v_visited : std_logic;
         variable v_new_data: std_logic_vector(DATA_BITS-1 downto 0);
 
-        -- Per-bank variables for MOVE_PROCESS_P
         variable v_dist1    : unsigned(8 downto 0);
         variable v_visited1 : std_logic;
         variable v_dist2    : unsigned(8 downto 0);
@@ -259,7 +255,6 @@ begin
             bram_we_int <= '0';
             irq         <= '0';
 
-            -- Default: parallel interfaces idle
             bram1_en <= '0'; bram1_we <= '0'; bram1_addr <= (others => '0'); bram1_din <= (others => '0');
             bram2_en <= '0'; bram2_we <= '0'; bram2_addr <= (others => '0'); bram2_din <= (others => '0');
             bram3_en <= '0'; bram3_we <= '0'; bram3_addr <= (others => '0'); bram3_din <= (others => '0');
@@ -351,16 +346,11 @@ begin
                                 eval_j <= current_y - 1;
                                 state  <= EVAL_READ;
                             else
-                                -- Reset per-bank min trackers for the upcoming parallel scan
                                 min_dist1 <= (others => '1'); next_x1 <= (others => '1'); next_y1 <= (others => '1');
                                 min_dist2 <= (others => '1'); next_x2 <= (others => '1'); next_y2 <= (others => '1');
                                 min_dist3 <= (others => '1'); next_x3 <= (others => '1'); next_y3 <= (others => '1');
                                 min_dist4 <= (others => '1'); next_x4 <= (others => '1'); next_y4 <= (others => '1');
-                                -- Seed each scanner at the start of its bank:
-                                -- BRAM1: flat 0..2499    -> starts at (x=0,  y=0)
-                                -- BRAM2: flat 2500..4999 -> starts at (x=25, y=0)
-                                -- BRAM3: flat 5000..7499 -> starts at (x=50, y=0)
-                                -- BRAM4: flat 7500..9999 -> starts at (x=75, y=0)
+
                                 pscan_x1 <= to_unsigned(0,  7); pscan_y1 <= to_unsigned(0, 7);
                                 pscan_x2 <= to_unsigned(25, 7); pscan_y2 <= to_unsigned(0, 7);
                                 pscan_x3 <= to_unsigned(50, 7); pscan_y3 <= to_unsigned(0, 7);
@@ -370,7 +360,6 @@ begin
                             end if;
                         end if;
 
-                    -- Parallel move scan: all 4 BRAMs read simultaneously each cycle
                     when MOVE_READ_P =>
                         bram1_en   <= '1';
                         bram1_we   <= '0';
@@ -390,7 +379,6 @@ begin
                         state <= MOVE_PROCESS_P;
 
                     when MOVE_PROCESS_P =>
-                        -- Process BRAM1 result
                         v_dist1    := unsigned(bram1_dout(23 downto 15));
                         v_visited1 := bram1_dout(0);
                         if pscan_x1 = current_x and pscan_y1 = current_y then
@@ -400,7 +388,6 @@ begin
                             min_dist1 <= v_dist1; next_x1 <= pscan_x1; next_y1 <= pscan_y1;
                         end if;
 
-                        -- Process BRAM2 result
                         v_dist2    := unsigned(bram2_dout(23 downto 15));
                         v_visited2 := bram2_dout(0);
                         if pscan_x2 = current_x and pscan_y2 = current_y then
@@ -410,7 +397,6 @@ begin
                             min_dist2 <= v_dist2; next_x2 <= pscan_x2; next_y2 <= pscan_y2;
                         end if;
 
-                        -- Process BRAM3 result
                         v_dist3    := unsigned(bram3_dout(23 downto 15));
                         v_visited3 := bram3_dout(0);
                         if pscan_x3 = current_x and pscan_y3 = current_y then
@@ -420,7 +406,6 @@ begin
                             min_dist3 <= v_dist3; next_x3 <= pscan_x3; next_y3 <= pscan_y3;
                         end if;
 
-                        -- Process BRAM4 result
                         v_dist4    := unsigned(bram4_dout(23 downto 15));
                         v_visited4 := bram4_dout(0);
                         if pscan_x4 = current_x and pscan_y4 = current_y then
@@ -433,7 +418,6 @@ begin
                         state <= MOVE_NEXT_P;
 
                     when MOVE_NEXT_P =>
-                        -- Advance all four scanners; each covers its 2500-entry bank
                         if pscan_y1 < GRID_SIZE - 1 then
                             pscan_y1 <= pscan_y1 + 1;
                             pscan_y2 <= pscan_y2 + 1;
@@ -446,9 +430,7 @@ begin
                             pscan_x4 <= pscan_x4 + 1; pscan_y4 <= (others => '0');
                         end if;
 
-                        -- All four banks done when each scanner is at its last entry
                         if (pscan_x1 = 24 and pscan_y1 = GRID_SIZE - 1) then
-                            -- Merge per-bank minimums into global next
                             min_dist <= (others => '1');
                             next_x   <= (others => '1');
                             next_y   <= (others => '1');
