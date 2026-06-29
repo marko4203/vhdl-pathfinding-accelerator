@@ -30,8 +30,8 @@ architecture Behavioral of tb is
     constant CLK_PERIOD    : time    := 10 ns;   -- 100 MHz
     constant BRAM_DEPTH    : integer := 2500;
     constant TOTAL_DEPTH   : integer := 10000;
-    constant BRAM_INIT     : string  := "C:/bram_init.txt";
-    constant BRAM_DUMP     : string  := "C:/paralelizacijaPSDS/bram_dump.txt";
+    constant BRAM_INIT     : string  := "C:/bram_init2.txt";
+    constant BRAM_DUMP     : string  := "C:/test2/bram_dump.txt";
 
     constant START_X : integer := 5;
     constant START_Y : integer := 5;
